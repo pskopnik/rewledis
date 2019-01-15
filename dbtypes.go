@@ -8,27 +8,27 @@ import (
 )
 
 type ArgsExtractor interface {
-	AppendArgs(args []interface{}, extracted []interface{}) []interface{}
+	AppendArgs(extracted []interface{}, args []interface{}) []interface{}
 	Args(args []interface{}) []interface{}
 }
 
 var _ ArgsExtractor = ArgsExtractorFunc(nil)
 
-type ArgsExtractorFunc func(args []interface{}, extracted []interface{}) []interface{}
+type ArgsExtractorFunc func(extracted []interface{}, args []interface{}) []interface{}
 
-func (a ArgsExtractorFunc) AppendArgs(args []interface{}, extracted []interface{}) []interface{} {
-	return a(args, extracted)
+func (a ArgsExtractorFunc) AppendArgs(extracted []interface{}, args []interface{}) []interface{} {
+	return a(extracted, args)
 }
 
 func (a ArgsExtractorFunc) Args(args []interface{}) []interface{} {
-	return a(args, nil)
+	return a(nil, args)
 }
 
 // ArgsAtIndices returns an ArgsExtractor.
 // The ArgsExtractor returns the arguments with the indices passed to
 // ArgsAtIndices.
 func ArgsAtIndices(indices ...int) ArgsExtractor {
-	return ArgsExtractorFunc(func(args []interface{}, extracted []interface{}) []interface{} {
+	return ArgsExtractorFunc(func(extracted []interface{}, args []interface{}) []interface{} {
 		baseInd := len(extracted)
 		extracted = append(extracted, make([]interface{}, len(indices))...)
 
@@ -68,7 +68,7 @@ func ArgsFromUntilIndex(from, until int, skip ...int) ArgsExtractor {
 		skipVal = skip[0]
 	}
 
-	return ArgsExtractorFunc(func(args []interface{}, extracted []interface{}) []interface{} {
+	return ArgsExtractorFunc(func(extracted []interface{}, args []interface{}) []interface{} {
 		untilIndex := until
 		if untilIndex <= 0 {
 			untilIndex = len(args) + untilIndex
@@ -188,12 +188,12 @@ func TypeSpecificBulkTransformer(config *TypeSpecificBulkTransformerConfig) Tran
 		var extractedArgsArray [12]interface{}
 		var keysArray [12]string
 
-		keyArgs := command.KeyExtractor.AppendArgs(args, extractedArgsArray[:0])
-		keys := appendArgsAsStrings(keyArgs, keysArray[:0])
+		keyArgs := command.KeyExtractor.AppendArgs(extractedArgsArray[:0], args)
+		keys := appendArgsAsSimpleStrings(keysArray[:0], keyArgs)
 
 		resolver := rewriter.Resolver()
 		ctx, cancel := context.WithCancel(context.Background())
-		typesInfo, err := resolver.ResolveAppend(ctx, keys, typeInfoArray[:0])
+		typesInfo, err := resolver.ResolveAppend(typeInfoArray[:0], ctx, keys)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -201,7 +201,7 @@ func TypeSpecificBulkTransformer(config *TypeSpecificBulkTransformerConfig) Tran
 
 		var appendArgs []interface{}
 		if config.AppendArgsExtractor != nil {
-			appendArgs = config.AppendArgsExtractor.AppendArgs(args, extractedArgsArray[:0])
+			appendArgs = config.AppendArgsExtractor.AppendArgs(extractedArgsArray[:0], args)
 		}
 
 		keyTypeAggregation := KeyTypeAggregation{}
@@ -339,13 +339,11 @@ type RedisCommand struct {
 }
 
 func (r RedisCommand) Keys(args []interface{}) []string {
-	var keyArgsArray [12]interface{}
-	keyArgs := r.KeyExtractor.AppendArgs(args, keyArgsArray[:0])
-	return argsAsStrings(keyArgs)
+	return r.AppendKeys(nil, args)
 }
 
-func (r RedisCommand) AppendKeys(args []interface{}, keys []string) []string {
+func (r RedisCommand) AppendKeys(keys []string, args []interface{}) []string {
 	var keyArgsArray [12]interface{}
-	keyArgs := r.KeyExtractor.AppendArgs(args, keyArgsArray[:0])
-	return appendArgsAsStrings(keyArgs, keys)
+	keyArgs := r.KeyExtractor.AppendArgs(keyArgsArray[:0], args)
+	return appendArgsAsSimpleStrings(keys, keyArgs)
 }

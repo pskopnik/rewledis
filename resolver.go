@@ -28,7 +28,7 @@ type Resolver struct {
 func (r *Resolver) ResolveOne(ctx context.Context, key string) (LedisType, error) {
 	var typesInfo [1]TypeInfo
 	keys := [1]string{key}
-	_, err := r.ResolveAppend(ctx, keys[:], typesInfo[:0])
+	_, err := r.ResolveAppend(typesInfo[:0], ctx, keys[:])
 	if err != nil {
 		return LedisTypeNone, err
 	}
@@ -36,7 +36,7 @@ func (r *Resolver) ResolveOne(ctx context.Context, key string) (LedisType, error
 	return typesInfo[0].Type, nil
 }
 
-func (r *Resolver) ResolveAppend(ctx context.Context, keys []string, typesInfo []TypeInfo) ([]TypeInfo, error) {
+func (r *Resolver) ResolveAppend(typesInfo []TypeInfo, ctx context.Context, keys []string) ([]TypeInfo, error) {
 	// Array for pre-allocated on-stack slices
 	var entriesDataArray [4]CacheEntryData
 	var entrySettersArray [4]CacheEntrySetter

@@ -12,13 +12,13 @@ import (
 // argsAsSimleStrings converts the args to their string form.
 // See argAsSimpleString for information how conversion is performed.
 func argsAsSimpleStrings(args []interface{}) []string {
-	return appendArgsAsSimpleStrings(args, nil)
+	return appendArgsAsSimpleStrings(nil, args)
 }
 
 // appendArgsAsSimpleStrings appends the string form of args to the stringArgs
 // slice.
 // See argAsSimpleString for information how conversion is performed.
-func appendArgsAsSimpleStrings(args []interface{}, stringArgs []string) []string {
+func appendArgsAsSimpleStrings(stringArgs []string, args []interface{}) []string {
 	baseIndex := len(stringArgs)
 	stringArgs = append(stringArgs, make([]string, len(args))...)
 
