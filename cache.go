@@ -67,12 +67,13 @@ func (c *CacheEntrySetter) Set(state CacheEntryState, keyType LedisType) {
 		panic("CacheEntrySetter: Set() called a second time")
 	}
 
-	if state == CacheEntryStateExists {
-	} else if state == CacheEntryStateDeleted {
+	switch state {
+	case CacheEntryStateExists:
+	case CacheEntryStateDeleted:
 		keyType = LedisTypeNone
-	} else if state == CacheEntryStateError {
+	case CacheEntryStateError:
 		keyType = LedisTypeNone
-	} else {
+	default:
 		panic("CacheEntryState: Set() called with invalid state parameter")
 	}
 
@@ -112,6 +113,61 @@ func (c *Cache) LoadType(key string) (LedisType, bool) {
 	}
 
 	return keyType, true
+}
+
+// TrySetEntry tries to update the entry for the given key with given state
+// and keyType information. TrySetEntry does not wait for an ongoing loading
+// procedure and returns without setting in this case. TrySetEntry returns
+// true, if the entry was updated and false if not.
+func (c *Cache) TrySetEntry(key string, state CacheEntryState, keyType LedisType) bool {
+	switch state {
+	case CacheEntryStateExists:
+	case CacheEntryStateDeleted:
+		keyType = LedisTypeNone
+	case CacheEntryStateError:
+		keyType = LedisTypeNone
+	default:
+		panic("Cache: TrySetEntry() called with invalid state parameter")
+	}
+
+	entry, ok := c.loadEntry(key)
+	if ok {
+		return c.trySetEntry(entry, state, keyType)
+	}
+
+	entry = &cacheEntry{
+		DoneLoading: nil,
+		State:       state,
+		Type:        keyType,
+		WrittenAt:   time.Now(),
+	}
+
+	loadedEntryIntf, loaded := c.entries.LoadOrStore(key, entry)
+	if loaded {
+		entry := loadedEntryIntf.(*cacheEntry)
+		return c.trySetEntry(entry, state, keyType)
+	}
+
+	return true
+}
+
+func (c *Cache) trySetEntry(entry *cacheEntry, state CacheEntryState, keyType LedisType) bool {
+	entry.RWMutex.Lock()
+
+	if entry.State == CacheEntryStateLoading {
+		entry.RWMutex.Unlock()
+
+		return false
+	} else {
+		entry.DoneLoading = nil
+		entry.State = state
+		entry.Type = keyType
+		entry.WrittenAt = time.Now()
+
+		entry.RWMutex.Unlock()
+
+		return true
+	}
 }
 
 // LoadOrCreateEntry is the primary access method for the cache. For a given
