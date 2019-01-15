@@ -37,6 +37,7 @@ const (
 	stringFREQ     = "FREQ"
 
 	stringLEDIS = "LEDIS"
+	stringSELF  = "SELF"
 )
 
 var (
@@ -58,6 +59,7 @@ var (
 	bytesFREQ     = []byte("FREQ")
 
 	bytesLEDIS = []byte("LEDIS")
+	bytesSELF  = []byte("SELF")
 )
 
 var (
@@ -531,6 +533,19 @@ func UnsafeCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 				RepliesCount: 1,
 				ProcessFunc: func(replies []interface{}) (interface{}, error) {
 					return replies[0], nil
+				},
+			}, nil
+		}), nil
+	} else if argInfo.EqualFoldEither(stringSELF, bytesSELF) {
+		if len(args) != 0 {
+			return nil, ErrInvalidSyntax
+		}
+
+		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
+			return Slot{
+				RepliesCount: 0,
+				ProcessFunc: func(replies []interface{}) (interface{}, error) {
+					return ledisConn, nil
 				},
 			}, nil
 		}), nil
