@@ -9,29 +9,34 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-func argsAsStrings(args []interface{}) []string {
-	return appendArgsAsStrings(args, nil)
+// argsAsSimleStrings converts the args to their string form.
+// See argAsSimpleString for information how conversion is performed.
+func argsAsSimpleStrings(args []interface{}) []string {
+	return appendArgsAsSimpleStrings(args, nil)
 }
 
-func appendArgsAsStrings(args []interface{}, stringArgs []string) []string {
+// appendArgsAsSimpleStrings appends the string form of args to the stringArgs
+// slice.
+// See argAsSimpleString for information how conversion is performed.
+func appendArgsAsSimpleStrings(args []interface{}, stringArgs []string) []string {
 	baseIndex := len(stringArgs)
 	stringArgs = append(stringArgs, make([]string, len(args))...)
 
 	for i, arg := range args {
-		stringArgs[baseIndex+i] = argAsString(arg)
+		stringArgs[baseIndex+i] = argAsSimpleString(arg)
 	}
 
 	return stringArgs
 }
 
-// argAsString converts an argument passed to redigo's Conn.Send() method to a
-// string. Only arguments which are would be send as redis strings are
+// argAsSimpleString converts an argument passed to redigo's Conn.Send()
+// method to a string. Only arguments which are sent as redis strings are
 // converted. For all other argument types, this function returns the empty
 // string ("").
 //
-// argAsString does not perform recursion and only supports one level of the
-// redis.Argument interface. This allows inlining.
-func argAsString(arg interface{}) string {
+// argAsSimpleString does not perform recursion and only supports one level of
+// the redis.Argument interface. This allows inlining.
+func argAsSimpleString(arg interface{}) string {
 	switch typedArg := arg.(type) {
 	case string:
 		return typedArg
@@ -72,58 +77,58 @@ func parseArgRecursive(info *argInfo) {
 	switch arg := info.UnwrappedArg.(type) {
 	case string:
 		info.Type = argTypeString
-		info.StringValue = arg
 	case []byte:
 		info.Type = argTypeBytes
-		info.BytesValue = arg
 	case int64:
 		info.Type = argTypeInt
-		info.Int64Value = int64(arg)
+		info.intValue = int64(arg)
 	case int32:
 		info.Type = argTypeInt
-		info.Int64Value = int64(arg)
+		info.intValue = int64(arg)
 	case int16:
 		info.Type = argTypeInt
-		info.Int64Value = int64(arg)
+		info.intValue = int64(arg)
 	case int8:
 		info.Type = argTypeInt
-		info.Int64Value = int64(arg)
+		info.intValue = int64(arg)
 	case int:
 		info.Type = argTypeInt
-		info.Int64Value = int64(arg)
+		info.intValue = int64(arg)
 	case uint64:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case uint32:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case uint16:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case uint8:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case uint:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case uintptr:
 		info.Type = argTypeInt
-		info.Uint64Value = uint64(arg)
+		info.intValue = int64(arg)
 	case float64:
 		info.Type = argTypeFloat
-		info.Float64Value = float64(arg)
+		info.floatValue = float64(arg)
 	case float32:
 		info.Type = argTypeFloat
-		info.Float64Value = float64(arg)
+		info.floatValue = float64(arg)
 	case complex64:
 		info.Type = argTypeComplex
-		info.Complex128Value = complex128(arg)
 	case complex128:
 		info.Type = argTypeComplex
-		info.Complex128Value = complex128(arg)
 	case bool:
 		info.Type = argTypeBool
-		info.BoolValue = arg
+		if arg {
+			info.intValue = 1
+		} else {
+			info.intValue = 0
+		}
 	case nil:
 		info.Type = argTypeNil
 	case redis.Argument:
@@ -153,17 +158,45 @@ const (
 )
 
 type argInfo struct {
-	Arg             interface{}
-	UnwrappedArg    interface{}
-	Complex128Value complex128
-	BytesValue      []byte
-	StringValue     string
-	Int64Value      int64
-	Uint64Value     uint64
-	Float64Value    float64
-	WrappingLevel   int
-	Type            argType
-	BoolValue       bool
+	Arg          interface{}
+	UnwrappedArg interface{}
+	// intValue stores the int, uint or bool value of the argument described.
+	intValue int64
+	// float64Value stores the float value of the argument described.
+	floatValue    float64
+	WrappingLevel int
+	Type          argType
+}
+
+func (a *argInfo) Complex128Value() complex128 {
+	if val, ok := a.UnwrappedArg.(complex128); ok {
+		return val
+	}
+	return complex128(a.UnwrappedArg.(complex64))
+}
+
+func (a *argInfo) BytesValue() []byte {
+	return a.UnwrappedArg.([]byte)
+}
+
+func (a *argInfo) StringValue() string {
+	return a.UnwrappedArg.(string)
+}
+
+func (a *argInfo) Int64Value() int64 {
+	return a.intValue
+}
+
+func (a *argInfo) Uint64Value() uint64 {
+	return uint64(a.intValue)
+}
+
+func (a *argInfo) Float64Value() float64 {
+	return a.floatValue
+}
+
+func (a *argInfo) BoolValue() bool {
+	return a.intValue != 0
 }
 
 // IsWrapped returns true iff a describes an argument wrapped in
@@ -182,9 +215,9 @@ func (a *argInfo) IsStringLike() bool {
 func (a *argInfo) EqualEither(tString string, tBytes []byte) bool {
 	switch a.Type {
 	case argTypeString:
-		return a.StringValue == tString
+		return a.StringValue() == tString
 	case argTypeBytes:
-		return bytes.Equal(a.BytesValue, tBytes)
+		return bytes.Equal(a.BytesValue(), tBytes)
 	default:
 		return false
 	}
@@ -195,9 +228,9 @@ func (a *argInfo) EqualEither(tString string, tBytes []byte) bool {
 func (a *argInfo) EqualFoldEither(tString string, tBytes []byte) bool {
 	switch a.Type {
 	case argTypeString:
-		return strings.EqualFold(a.StringValue, tString)
+		return strings.EqualFold(a.StringValue(), tString)
 	case argTypeBytes:
-		return bytes.EqualFold(a.BytesValue, tBytes)
+		return bytes.EqualFold(a.BytesValue(), tBytes)
 	default:
 		return false
 	}
@@ -210,17 +243,17 @@ func (a *argInfo) EqualFoldEither(tString string, tBytes []byte) bool {
 func (a *argInfo) ConvertToRedisString() (string, error) {
 	switch a.Type {
 	case argTypeString:
-		return a.StringValue, nil
+		return a.StringValue(), nil
 	case argTypeBytes:
-		return string(a.BytesValue), nil
+		return string(a.BytesValue()), nil
 	case argTypeInt:
-		return strconv.FormatInt(a.Int64Value, 10), nil
+		return strconv.FormatInt(a.Int64Value(), 10), nil
 	case argTypeUint:
-		return strconv.FormatUint(a.Uint64Value, 10), nil
+		return strconv.FormatUint(a.Uint64Value(), 10), nil
 	case argTypeFloat:
-		return strconv.FormatFloat(a.Float64Value, 'f', -1, 64), nil
+		return strconv.FormatFloat(a.Float64Value(), 'f', -1, 64), nil
 	case argTypeBool:
-		if a.BoolValue {
+		if a.BoolValue() {
 			return "1", nil
 		} else {
 			return "0", nil
@@ -241,17 +274,17 @@ func (a *argInfo) ConvertToRedisString() (string, error) {
 func (a *argInfo) ConvertToRedisBytesString() ([]byte, error) {
 	switch a.Type {
 	case argTypeString:
-		return []byte(a.StringValue), nil
+		return []byte(a.StringValue()), nil
 	case argTypeBytes:
-		return a.BytesValue, nil
+		return a.BytesValue(), nil
 	case argTypeInt:
-		return strconv.AppendInt(nil, a.Int64Value, 10), nil
+		return strconv.AppendInt(nil, a.Int64Value(), 10), nil
 	case argTypeUint:
-		return strconv.AppendUint(nil, a.Uint64Value, 10), nil
+		return strconv.AppendUint(nil, a.Uint64Value(), 10), nil
 	case argTypeFloat:
-		return strconv.AppendFloat(nil, a.Float64Value, 'f', -1, 64), nil
+		return strconv.AppendFloat(nil, a.Float64Value(), 'f', -1, 64), nil
 	case argTypeBool:
-		if a.BoolValue {
+		if a.BoolValue() {
 			return []byte("1"), nil
 		} else {
 			return []byte("0"), nil
@@ -270,17 +303,17 @@ func (a *argInfo) ConvertToRedisBytesString() ([]byte, error) {
 func (a *argInfo) AppendRedisBytesString(buf []byte) ([]byte, error) {
 	switch a.Type {
 	case argTypeString:
-		return append(buf, a.StringValue...), nil
+		return append(buf, a.StringValue()...), nil
 	case argTypeBytes:
-		return append(buf, a.BytesValue...), nil
+		return append(buf, a.BytesValue()...), nil
 	case argTypeInt:
-		return strconv.AppendInt(buf, a.Int64Value, 10), nil
+		return strconv.AppendInt(buf, a.Int64Value(), 10), nil
 	case argTypeUint:
-		return strconv.AppendUint(buf, a.Uint64Value, 10), nil
+		return strconv.AppendUint(buf, a.Uint64Value(), 10), nil
 	case argTypeFloat:
-		return strconv.AppendFloat(buf, a.Float64Value, 'f', -1, 64), nil
+		return strconv.AppendFloat(buf, a.Float64Value(), 'f', -1, 64), nil
 	case argTypeBool:
-		if a.BoolValue {
+		if a.BoolValue() {
 			return append(buf, '1'), nil
 		} else {
 			return append(buf, '0'), nil
@@ -300,17 +333,17 @@ func (a *argInfo) AppendRedisBytesString(buf []byte) ([]byte, error) {
 func (a *argInfo) ConvertToInt() (int64, error) {
 	switch a.Type {
 	case argTypeString:
-		return strconv.ParseInt(a.StringValue, 10, 64)
+		return strconv.ParseInt(a.StringValue(), 10, 64)
 	case argTypeBytes:
-		return strconv.ParseInt(string(a.BytesValue), 10, 64)
+		return strconv.ParseInt(string(a.BytesValue()), 10, 64)
 	case argTypeInt:
-		return a.Int64Value, nil
+		return a.Int64Value(), nil
 	case argTypeUint:
-		return int64(a.Uint64Value), nil
+		return int64(a.Uint64Value()), nil
 	case argTypeFloat:
-		return int64(a.Float64Value), nil
+		return int64(a.Float64Value()), nil
 	case argTypeBool:
-		if a.BoolValue {
+		if a.BoolValue() {
 			return 1, nil
 		} else {
 			return 0, nil
@@ -330,17 +363,17 @@ func (a *argInfo) ConvertToInt() (int64, error) {
 func (a *argInfo) ConvertToUint() (uint64, error) {
 	switch a.Type {
 	case argTypeString:
-		return strconv.ParseUint(a.StringValue, 10, 64)
+		return strconv.ParseUint(a.StringValue(), 10, 64)
 	case argTypeBytes:
-		return strconv.ParseUint(string(a.BytesValue), 10, 64)
+		return strconv.ParseUint(string(a.BytesValue()), 10, 64)
 	case argTypeInt:
-		return uint64(a.Int64Value), nil
+		return uint64(a.Int64Value()), nil
 	case argTypeUint:
-		return a.Uint64Value, nil
+		return a.Uint64Value(), nil
 	case argTypeFloat:
-		return uint64(a.Float64Value), nil
+		return uint64(a.Float64Value()), nil
 	case argTypeBool:
-		if a.BoolValue {
+		if a.BoolValue() {
 			return 1, nil
 		} else {
 			return 0, nil
