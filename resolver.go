@@ -21,8 +21,8 @@ type TypeInfo struct {
 // Resolver provides functionality to resolve the type of keys while using a
 // Cache instance.
 type Resolver struct {
-	Cache *Cache
-	Pool  *redis.Pool
+	Cache   *Cache
+	SubPool *SubPool
 }
 
 func (r *Resolver) ResolveOne(ctx context.Context, key string) (LedisType, error) {
@@ -215,7 +215,7 @@ func (r *Resolver) sortApartCoSortEntrySetters(typesInfo []TypeInfo, entrySetter
 }
 
 func (r *Resolver) checkType(ctx context.Context, checkType LedisType, typesInfo []TypeInfo) error {
-	conn, err := r.Pool.GetContext(ctx)
+	conn, err := r.SubPool.getRaw(ctx)
 	if err != nil {
 		return err
 	}

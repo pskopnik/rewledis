@@ -5,16 +5,57 @@ import (
 )
 
 type Rewriter struct {
-	cache         Cache
-	ResolvingPool *redis.Pool
+	cache           Cache
+	primaryPool     *redis.Pool
+	internalSubPool SubPool
+}
+
+// NewPrimaryPool creates a new pool from config and uses the created pool as
+// its primary pool. The primary pool is used for internal operations, at the
+// moment only by a Resolver. Use internalMaxActive to set the maximum number
+// of connections used for internal purposes. 0 means no limit.
+//
+// The primary pool is not changed if the primary pool of the Rewriter has
+// already been set and this method is called again.
+//
+// The returned Pool yields wrapped connections emulating Redis semantics.
+// Commands are rewritten using this Rewriter.
+func (r *Rewriter) NewPrimaryPool(config *PoolConfig, internalMaxActive int) *redis.Pool {
+	pool := &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			conn, err := config.Dial()
+			if err != nil {
+				return nil, err
+			}
+
+			return &LedisConn{
+				rewriter: r,
+				conn:     conn,
+			}, nil
+		},
+		TestOnBorrow:    config.TestOnBorrow,
+		MaxIdle:         config.MaxIdle,
+		MaxActive:       config.MaxActive,
+		IdleTimeout:     config.IdleTimeout,
+		Wait:            config.Wait,
+		MaxConnLifetime: config.MaxConnLifetime,
+	}
+
+	if r.primaryPool == nil {
+		r.primaryPool = pool
+		r.internalSubPool.Pool = pool
+		r.internalSubPool.MaxActive = internalMaxActive
+	}
+
+	return pool
 }
 
 // NewPool creates and returns a new Pool of connections to a LedisDB server.
 // The returned Pool yields wrapped connections emulating Redis semantics.
 // Commands are rewritten using this Rewriter.
 //
-// In order for rewriting to work properly, the ResolvingPool of the Rewriter
-// has to be instantiated.
+// In order for rewriting to work properly, the primary pool of the Rewriter
+// must have been set. That means NewPrimaryPool has to have been called.
 func (r *Rewriter) NewPool(config *PoolConfig) *redis.Pool {
 	pool := &redis.Pool{
 		Dial: func() (redis.Conn, error) {
@@ -39,25 +80,11 @@ func (r *Rewriter) NewPool(config *PoolConfig) *redis.Pool {
 	return pool
 }
 
-// ResolvingPoolFromConfig instantiates a new ResolvingPool from the passed in
-// PoolConfig.
-func (r *Rewriter) ResolvingPoolFromConfig(config *PoolConfig) {
-	r.ResolvingPool = &redis.Pool{
-		Dial:            config.Dial,
-		TestOnBorrow:    config.TestOnBorrow,
-		MaxIdle:         config.MaxIdle,
-		MaxActive:       config.MaxActive,
-		IdleTimeout:     config.IdleTimeout,
-		Wait:            config.Wait,
-		MaxConnLifetime: config.MaxConnLifetime,
-	}
-}
-
 // Resolver constructs and returns a Resolver instance using this rewriter.
 func (r *Rewriter) Resolver() Resolver {
 	return Resolver{
-		Cache: &r.cache,
-		Pool:  r.ResolvingPool,
+		Cache:   &r.cache,
+		SubPool: &r.internalSubPool,
 	}
 }
 

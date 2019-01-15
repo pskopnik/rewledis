@@ -47,14 +47,9 @@ type PoolConfig struct {
 
 // NewPool is a convenience function creating a new Pool returning rewriting
 // connections.
-// A new Rewriter instance is created (but not returned). The same PoolConfig
-// is used for the resolving pool of the rewriter and for the pool returned.
-// This means that the supplied MaxActive and MaxIdle values are effectively
-// doubled.
-// Create a Rewriter instance manually for more control over the configuration
-// of the resolving pool.
-func NewPool(poolConfig *PoolConfig) *redis.Pool {
+// poolConfig and internalMaxActive are passed on to
+// (*Rewriter).NewPrimaryPool().
+func NewPool(poolConfig *PoolConfig, internalMaxActive int) *redis.Pool {
 	rewriter := &Rewriter{}
-	rewriter.ResolvingPoolFromConfig(poolConfig)
-	return rewriter.NewPool(poolConfig)
+	return rewriter.NewPrimaryPool(poolConfig, internalMaxActive)
 }
