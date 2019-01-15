@@ -1,0 +1,3 @@
+[submodule "genny-deque"]
+	path = genny-deque
+	url = https://github.com/pskopnik/genny-deque.git

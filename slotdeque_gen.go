@@ -4,8 +4,10 @@
 
 package rewledis
 
-// This file is a modification of https://github.com/gammazero/deque
+// This file is a modified version of https://github.com/gammazero/deque
 // Copyright (c) 2018 Andrew J. Gillis. Licensed under the MIT License.
+
+var nilSlot Slot
 
 // minCapacity is the smallest capacity that deque may have.
 // Must be power of 2 for bitwise modulus: x % n == x & (n - 1).
@@ -54,7 +56,7 @@ func (q *SlotDeque) PopFront() Slot {
 		panic("deque: PopFront() called on empty queue")
 	}
 	ret := q.buf[q.head]
-	q.buf[q.head] = Slot{}
+	q.buf[q.head] = nilSlot
 	// Calculate new head position.
 	q.head = q.next(q.head)
 	q.count--
@@ -76,7 +78,7 @@ func (q *SlotDeque) PopBack() Slot {
 
 	// Remove value at tail.
 	ret := q.buf[q.tail]
-	q.buf[q.tail] = Slot{}
+	q.buf[q.tail] = nilSlot
 	q.count--
 
 	q.shrinkIfExcess()
@@ -132,7 +134,7 @@ func (q *SlotDeque) Clear() {
 	// bitwise modulus
 	modBits := len(q.buf) - 1
 	for h := q.head; h != q.tail; h = (h + 1) & modBits {
-		q.buf[h] = Slot{}
+		q.buf[h] = nilSlot
 	}
 	q.head = 0
 	q.tail = 0
@@ -169,7 +171,7 @@ func (q *SlotDeque) Rotate(n int) {
 			q.tail = (q.tail - 1) & modBits
 			// Put tail value at head and remove value at tail.
 			q.buf[q.head] = q.buf[q.tail]
-			q.buf[q.tail] = Slot{}
+			q.buf[q.tail] = nilSlot
 		}
 		return
 	}
@@ -178,7 +180,7 @@ func (q *SlotDeque) Rotate(n int) {
 	for ; n > 0; n-- {
 		// Put head value at tail and remove value at head.
 		q.buf[q.tail] = q.buf[q.head]
-		q.buf[q.head] = Slot{}
+		q.buf[q.head] = nilSlot
 		// Calculate new head and tail using bitwise modulus.
 		q.head = (q.head + 1) & modBits
 		q.tail = (q.tail + 1) & modBits
