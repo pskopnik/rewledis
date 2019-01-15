@@ -66,70 +66,6 @@ var (
 	noneTransformerInstance = NoneTransformer()
 )
 
-// ScriptCommandTransformer performs transformations for the SCRIPT Redis
-// command.
-//
-// Only some sub-commands are supported. Issuing a not supported sub-command
-// results in a ErrSubCommandNotImplemented error.
-//
-//     Implemented:
-//       SCRIPT EXISTS sha1 [sha1 ...]
-//       SCRIPT FLUSH
-//       SCRIPT LOAD script
-//     Not implemented:
-//       SCRIPT DEBUG YES|SYNC|NO
-//       SCRIPT KILL
-func ScriptCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
-	if len(args) < 1 {
-		return nil, ErrInvalidSyntax
-	}
-
-	argInfo := rewledisArgs.Parse(args[0])
-	if !argInfo.IsStringLike() {
-		return nil, ErrInvalidArgumentType
-	}
-
-	if argInfo.EqualFoldEither(stringEXISTS, bytesEXISTS) {
-		return noneTransformerInstance(rewriter, command, args)
-	} else if argInfo.EqualFoldEither(stringFLUSH, bytesFLUSH) {
-		return noneTransformerInstance(rewriter, command, args)
-	} else if argInfo.EqualFoldEither(stringLOAD, bytesLOAD) {
-		return noneTransformerInstance(rewriter, command, args)
-	} else {
-		return nil, ErrSubCommandNotImplemented
-	}
-}
-
-// PingCommandTransformer performs transformations for the PING Redis command.
-func PingCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
-	if len(args) == 0 {
-		return noneTransformerInstance(rewriter, command, args)
-	} else if len(args) == 1 {
-		argInfo := rewledisArgs.Parse(args[0])
-
-		message, err := argInfo.ConvertToRedisString()
-		if err != nil {
-			return nil, err
-		}
-
-		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
-			err := ledisConn.Send(command.Name)
-			if err != nil {
-				return Slot{}, err
-			}
-
-			return Slot{
-				RepliesCount: 1,
-				ProcessFunc: func(replies []interface{}) (interface{}, error) {
-					return message, nil
-				},
-			}, nil
-		}), nil
-	} else {
-		return nil, ErrInvalidSyntax
-	}
-}
-
 // SetCommandTransformer performs transformations for the SET Redis
 // command.
 //
@@ -497,6 +433,70 @@ func parseRestoreCommand(args []interface{}) (info restoreCommandInfo, err error
 	}
 
 	return
+}
+
+// PingCommandTransformer performs transformations for the PING Redis command.
+func PingCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
+	if len(args) == 0 {
+		return noneTransformerInstance(rewriter, command, args)
+	} else if len(args) == 1 {
+		argInfo := rewledisArgs.Parse(args[0])
+
+		message, err := argInfo.ConvertToRedisString()
+		if err != nil {
+			return nil, err
+		}
+
+		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
+			err := ledisConn.Send(command.Name)
+			if err != nil {
+				return Slot{}, err
+			}
+
+			return Slot{
+				RepliesCount: 1,
+				ProcessFunc: func(replies []interface{}) (interface{}, error) {
+					return message, nil
+				},
+			}, nil
+		}), nil
+	} else {
+		return nil, ErrInvalidSyntax
+	}
+}
+
+// ScriptCommandTransformer performs transformations for the SCRIPT Redis
+// command.
+//
+// Only some sub-commands are supported. Issuing a not supported sub-command
+// results in a ErrSubCommandNotImplemented error.
+//
+//     Implemented:
+//       SCRIPT EXISTS sha1 [sha1 ...]
+//       SCRIPT FLUSH
+//       SCRIPT LOAD script
+//     Not implemented:
+//       SCRIPT DEBUG YES|SYNC|NO
+//       SCRIPT KILL
+func ScriptCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
+	if len(args) < 1 {
+		return nil, ErrInvalidSyntax
+	}
+
+	argInfo := rewledisArgs.Parse(args[0])
+	if !argInfo.IsStringLike() {
+		return nil, ErrInvalidArgumentType
+	}
+
+	if argInfo.EqualFoldEither(stringEXISTS, bytesEXISTS) {
+		return noneTransformerInstance(rewriter, command, args)
+	} else if argInfo.EqualFoldEither(stringFLUSH, bytesFLUSH) {
+		return noneTransformerInstance(rewriter, command, args)
+	} else if argInfo.EqualFoldEither(stringLOAD, bytesLOAD) {
+		return noneTransformerInstance(rewriter, command, args)
+	} else {
+		return nil, ErrSubCommandNotImplemented
+	}
 }
 
 // UnsafeCommandTransformer performs transformations for the UNSAFE Redis
