@@ -3,7 +3,7 @@ package rewledis
 import (
 	"errors"
 
-	"github.com/pskopnik/rewledis/args"
+	rewledisArgs "github.com/pskopnik/rewledis/args"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -82,7 +82,7 @@ func ScriptCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 		return nil, ErrInvalidSyntax
 	}
 
-	argInfo := args.Parse(args[0])
+	argInfo := rewledisArgs.Parse(args[0])
 	if !argInfo.IsStringLike() {
 		return nil, ErrInvalidArgumentType
 	}
@@ -202,7 +202,7 @@ func parseSetCommand(args []interface{}) (info setCommandInfo, err error) {
 	}
 
 	for i := 2; i < len(args); i++ {
-		argInfo := args.Parse(args[i])
+		argInfo := rewledisArgs.Parse(args[i])
 
 		if !argInfo.IsStringLike() {
 			err = ErrInvalidArgumentType
@@ -216,7 +216,7 @@ func parseSetCommand(args []interface{}) (info setCommandInfo, err error) {
 			}
 
 			i++
-			valueInfo := args.Parse(args[i])
+			valueInfo := rewledisArgs.Parse(args[i])
 			info.EX, err = valueInfo.ConvertToInt()
 			if err != nil {
 				return
@@ -229,7 +229,7 @@ func parseSetCommand(args []interface{}) (info setCommandInfo, err error) {
 			}
 
 			i++
-			valueInfo := args.Parse(args[i])
+			valueInfo := rewledisArgs.Parse(args[i])
 			info.PX, err = valueInfo.ConvertToInt()
 			if err != nil {
 				return
@@ -312,7 +312,7 @@ func parseZaddCommand(args []interface{}) (info zaddCommandInfo, err error) {
 	}
 
 	for i := 1; i < len(args); i++ {
-		argInfo := args.Parse(args[i])
+		argInfo := rewledisArgs.Parse(args[i])
 
 		if !argInfo.IsStringLike() {
 			break
@@ -363,7 +363,7 @@ func RestoreCommandTransformer(rewriter *Rewriter, command *RedisCommand, args [
 	var expireAtTimestamp int64
 	if commandInfo.ABSTTLSet {
 		setExpireAt = true
-		argInfo := args.Parse(args[1])
+		argInfo := rewledisArgs.Parse(args[1])
 		expireAtTimestamp, err = argInfo.ConvertToInt()
 		if err != nil {
 			return nil, err
@@ -421,7 +421,7 @@ func parseRestoreCommand(args []interface{}) (info restoreCommandInfo, err error
 	}
 
 	for i := 1; i < len(args); i++ {
-		argInfo := args.Parse(args[i])
+		argInfo := rewledisArgs.Parse(args[i])
 
 		if !argInfo.IsStringLike() {
 			err = ErrInvalidArgumentType
@@ -439,7 +439,7 @@ func parseRestoreCommand(args []interface{}) (info restoreCommandInfo, err error
 			}
 
 			i++
-			valueInfo := args.Parse(args[i])
+			valueInfo := rewledisArgs.Parse(args[i])
 			info.IDLETIME, err = valueInfo.ConvertToInt()
 			if err != nil {
 				return
@@ -452,7 +452,7 @@ func parseRestoreCommand(args []interface{}) (info restoreCommandInfo, err error
 			}
 
 			i++
-			valueInfo := args.Parse(args[i])
+			valueInfo := rewledisArgs.Parse(args[i])
 			info.FREQ, err = valueInfo.ConvertToInt()
 			if err != nil {
 				return
@@ -473,7 +473,7 @@ func UnsafeCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 	if len(args) < 1 {
 		return nil, ErrInvalidSyntax
 	}
-	argInfo := args.Parse(args[0])
+	argInfo := rewledisArgs.Parse(args[0])
 	if !argInfo.IsStringLike() {
 		return nil, ErrInvalidArgumentType
 	}
@@ -482,7 +482,7 @@ func UnsafeCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 		if len(args) < 2 {
 			return nil, ErrInvalidSyntax
 		}
-		commandArgInfo := args.Parse(args[1])
+		commandArgInfo := rewledisArgs.Parse(args[1])
 		if !commandArgInfo.IsStringLike() {
 			return nil, ErrInvalidArgumentType
 		}
