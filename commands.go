@@ -1202,6 +1202,10 @@ func RedisCommandFromName(name string) (*RedisCommand, error) {
 		return &RedisCommandEXPIREAT, nil
 	case "PERSIST":
 		return &RedisCommandPERSIST, nil
+	case "RESTORE":
+		return &RedisCommandRESTORE, nil
+	case "SORT":
+		return &RedisCommandSORT, nil
 	case "TTL":
 		return &RedisCommandTTL, nil
 	case "AUTH":
