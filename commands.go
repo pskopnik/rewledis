@@ -36,6 +36,8 @@ var (
 	// destkey is a string.
 	// If no keys are set the result of applying the operation is a 0 length
 	// string. In this case Redis sets destkey to nil (does not exist).
+	//
+	// TODO: Define the exact meaning of KeyType / KeyExtractor.
 	RedisCommandBITOP = RedisCommand{
 		Name:          "BITOP",
 		KeyType:       RedisTypeString,
