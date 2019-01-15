@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/pskopnik/rewledis/args"
+
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -189,7 +191,7 @@ func TypeSpecificBulkTransformer(config *TypeSpecificBulkTransformerConfig) Tran
 		var keysArray [12]string
 
 		keyArgs := command.KeyExtractor.AppendArgs(extractedArgsArray[:0], args)
-		keys := appendArgsAsSimpleStrings(keysArray[:0], keyArgs)
+		keys := args.AppendAsSimpleStrings(keysArray[:0], keyArgs)
 
 		resolver := rewriter.Resolver()
 		ctx, cancel := context.WithCancel(context.Background())
@@ -345,5 +347,5 @@ func (r RedisCommand) Keys(args []interface{}) []string {
 func (r RedisCommand) AppendKeys(keys []string, args []interface{}) []string {
 	var keyArgsArray [12]interface{}
 	keyArgs := r.KeyExtractor.AppendArgs(keyArgsArray[:0], args)
-	return appendArgsAsSimpleStrings(keys, keyArgs)
+	return args.AppendAsSimpleStrings(keys, keyArgs)
 }
