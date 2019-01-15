@@ -956,20 +956,41 @@ var (
 //
 //     https://redis.io/commands#connection
 var (
-// Redis
+	RedisCommandAUTH = RedisCommand{
+		Name:          "AUTH",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(),
+		TransformFunc: NoneTransformer(),
+		Syntax:        "AUTH password",
+	}
 
-// AUTH password
-// ECHO message
-// PING [message]
-// QUIT
-// SELECT index
-// SWAPDB index index
+	RedisCommandECHO = RedisCommand{
+		Name:          "ECHO",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(),
+		TransformFunc: NoneTransformer(),
+		Syntax:        "ECHO message",
+	}
 
-// LedisDB
+	RedisCommandPING = RedisCommand{
+		Name:          "PING",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(),
+		TransformFunc: PingCommandTransformer,
+		Syntax:        "PING [message]",
+	}
 
-// ECHO message
-// PING
-// SELECT index
+	// QUIT command is not implemented in LedisDB.
+
+	RedisCommandSELECT = RedisCommand{
+		Name:          "SELECT",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(),
+		TransformFunc: NoneTransformer(),
+		Syntax:        "SELECT index",
+	}
+
+	// SWAPDB command is not implemented in LedisDB.
 )
 
 // RedisCommand variables describing the Redis commands for working with lua
@@ -1183,6 +1204,14 @@ func RedisCommandFromName(name string) (*RedisCommand, error) {
 		return &RedisCommandPERSIST, nil
 	case "TTL":
 		return &RedisCommandTTL, nil
+	case "AUTH":
+		return &RedisCommandAUTH, nil
+	case "ECHO":
+		return &RedisCommandECHO, nil
+	case "PING":
+		return &RedisCommandPING, nil
+	case "SELECT":
+		return &RedisCommandSELECT, nil
 	case "EVAL":
 		return &RedisCommandEVAL, nil
 	case "EVALSHA":

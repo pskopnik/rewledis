@@ -98,6 +98,36 @@ func ScriptCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 	}
 }
 
+// PingCommandTransformer performs transformations for the PING Redis command.
+func PingCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
+	if len(args) == 0 {
+		return noneTransformerInstance(rewriter, command, args)
+	} else if len(args) == 1 {
+		argInfo := rewledisArgs.Parse(args[0])
+
+		message, err := argInfo.ConvertToRedisString()
+		if err != nil {
+			return nil, err
+		}
+
+		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
+			err := ledisConn.Send(command.Name)
+			if err != nil {
+				return Slot{}, err
+			}
+
+			return Slot{
+				RepliesCount: 1,
+				ProcessFunc: func(replies []interface{}) (interface{}, error) {
+					return message, nil
+				},
+			}, nil
+		}), nil
+	} else {
+		return nil, ErrInvalidSyntax
+	}
+}
+
 // SetCommandTransformer performs transformations for the SET Redis
 // command.
 //
