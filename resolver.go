@@ -7,11 +7,10 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-// Error variables related to the Resolver type.
+// Error variables related to Resolver.
 var (
-	ErrInvalidSubPoolConnectionType = errors.New("connection of invalid type returned by SubPool")
-	ErrUnexpectedCacheEntryState    = errors.New("encountered cache entry with unexpected state")
-	ErrErrorCacheEntryState         = errors.New("encountered cache entry with Error state")
+	ErrUnexpectedCacheEntryState = errors.New("encountered cache entry with unexpected state")
+	ErrErrorCacheEntryState      = errors.New("encountered cache entry with Error state")
 )
 
 type TypeInfo struct {
@@ -22,8 +21,8 @@ type TypeInfo struct {
 // Resolver provides functionality to resolve the type of keys while using a
 // Cache instance.
 type Resolver struct {
-	Cache   *Cache
-	SubPool *SubPool
+	Cache *Cache
+	Pool  *redis.Pool
 }
 
 func (r *Resolver) ResolveOne(ctx context.Context, key string) (LedisType, error) {
@@ -175,14 +174,15 @@ func (r *Resolver) waitResolve(ctx context.Context, entriesData []CacheEntryData
 func (r *Resolver) sortApart(typesInfo []TypeInfo) int {
 	noneBegin := len(typesInfo)
 
-	for i := 0; i+1 < noneBegin; i++ {
-		for i+1 < noneBegin {
+	for i := 0; i < noneBegin; i++ {
+		for i < noneBegin {
 			if typesInfo[i].Type != LedisTypeNone {
 				break
 			}
 
 			noneBegin--
 
+			// TODO potential self-assignment: should this be if-ed out?
 			typesInfo[i], typesInfo[noneBegin] = typesInfo[noneBegin], typesInfo[i]
 		}
 	}
@@ -197,14 +197,15 @@ func (r *Resolver) sortApart(typesInfo []TypeInfo) int {
 func (r *Resolver) sortApartCoSortEntrySetters(typesInfo []TypeInfo, entrySetters []CacheEntrySetter) int {
 	noneBegin := len(typesInfo)
 
-	for i := 0; i+1 < noneBegin; i++ {
-		for i+1 < noneBegin {
+	for i := 0; i < noneBegin; i++ {
+		for i < noneBegin {
 			if typesInfo[i].Type != LedisTypeNone {
 				break
 			}
 
 			noneBegin--
 
+			// TODO potential self-assignment: should this be if-ed out?
 			typesInfo[i], typesInfo[noneBegin] = typesInfo[noneBegin], typesInfo[i]
 			entrySetters[i], entrySetters[noneBegin] = entrySetters[noneBegin], entrySetters[i]
 		}
@@ -214,17 +215,11 @@ func (r *Resolver) sortApartCoSortEntrySetters(typesInfo []TypeInfo, entrySetter
 }
 
 func (r *Resolver) checkType(ctx context.Context, checkType LedisType, typesInfo []TypeInfo) error {
-	poolConn, err := r.SubPool.GetContext(ctx)
+	conn, err := r.Pool.GetContext(ctx)
 	if err != nil {
 		return err
 	}
-	defer poolConn.Close()
-
-	ledisConn, ok := poolConn.(*subPoolConn).Conn.(*LedisConn)
-	if !ok {
-		return ErrInvalidSubPoolConnectionType
-	}
-	conn := ledisConn.RawConn()
+	defer conn.Close()
 
 	command, err := r.existsCommandForType(checkType)
 	if err != nil {

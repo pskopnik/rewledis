@@ -105,7 +105,7 @@ func (l *LedisConn) Flush() error {
 	return nil
 }
 
-// Receive receives a single reply from the Redis server
+// Receive receives a single reply from the Redis server.
 func (l *LedisConn) Receive() (interface{}, error) {
 	if l.conn == nil {
 		return nil, ErrConnClosed

@@ -3,216 +3,53 @@ package rewledis
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/gomodule/redigo/redis"
 )
 
-var (
-	ErrUnknownLedisTypeString   = errors.New("input string does not represent a known LedisType value")
-	ErrInvalidLedisType         = errors.New("input LedisType value is unknown or otherwise invalid for this operation")
-	ErrNoCorrespondingLedisType = errors.New("there is no LedisType value corresponding to the input RedisType value")
-)
-
-type LedisType int8
-
-const (
-	LedisTypeNone LedisType = iota
-	LedisTypeKV
-	LedisTypeList
-	LedisTypeHash
-	LedisTypeSet
-	LedisTypeZSet
-)
-
-func (l LedisType) String() string {
-	switch l {
-	case LedisTypeNone:
-		return "None"
-	case LedisTypeKV:
-		return "KV"
-	case LedisTypeList:
-		return "List"
-	case LedisTypeHash:
-		return "Hash"
-	case LedisTypeSet:
-		return "Set"
-	case LedisTypeZSet:
-		return "ZSet"
-	default:
-		return fmt.Sprintf("LedisType(%d)", l)
-	}
+type ArgsExtractor interface {
+	AppendArgs(args []interface{}, extracted []interface{}) []interface{}
+	Args(args []interface{}) []interface{}
 }
 
-func ParseLedisType(str string) (LedisType, error) {
-	switch str {
-	case "None":
-		return LedisTypeNone, nil
-	case "KV":
-		return LedisTypeKV, nil
-	case "List":
-		return LedisTypeList, nil
-	case "Hash":
-		return LedisTypeHash, nil
-	case "Set":
-		return LedisTypeSet, nil
-	case "ZSet":
-		return LedisTypeZSet, nil
-	default:
-		return LedisTypeNone, ErrUnknownLedisTypeString
-	}
+var _ ArgsExtractor = ArgsExtractorFunc(nil)
 
-}
-func ParseLedisTypeFromLedis(str string) (LedisType, error) {
-	switch str {
-	case "KV":
-		return LedisTypeKV, nil
-	case "LIST":
-		return LedisTypeList, nil
-	case "HASH":
-		return LedisTypeHash, nil
-	case "SET":
-		return LedisTypeSet, nil
-	case "ZSET":
-		return LedisTypeZSet, nil
-	default:
-		return LedisTypeNone, ErrUnknownLedisTypeString
-	}
+type ArgsExtractorFunc func(args []interface{}, extracted []interface{}) []interface{}
+
+func (a ArgsExtractorFunc) AppendArgs(args []interface{}, extracted []interface{}) []interface{} {
+	return a(args, extracted)
 }
 
-func LedisTypeFromRedisType(redisType RedisType) (LedisType, error) {
-	switch redisType {
-	case RedisTypeNone:
-		return LedisTypeNone, nil
-	case RedisTypeString:
-		return LedisTypeKV, nil
-	case RedisTypeList:
-		return LedisTypeList, nil
-	case RedisTypeHash:
-		return LedisTypeHash, nil
-	case RedisTypeSet:
-		return LedisTypeSet, nil
-	case RedisTypeZSet:
-		return LedisTypeZSet, nil
-	case RedisTypeGeneric:
-		return LedisTypeNone, ErrNoCorrespondingLedisType
-	default:
-		return LedisTypeNone, ErrInvalidRedisType
-	}
+func (a ArgsExtractorFunc) Args(args []interface{}) []interface{} {
+	return a(args, nil)
 }
 
-var (
-	ErrUnknownRedisTypeString = errors.New("input string does not represent a known RedisType value")
-	ErrInvalidRedisType       = errors.New("input RedisType value is unknown or otherwise invalid for this operation")
-)
-
-type RedisType int8
-
-const (
-	RedisTypeNone RedisType = iota
-	RedisTypeString
-	RedisTypeList
-	RedisTypeHash
-	RedisTypeSet
-	RedisTypeZSet
-
-	RedisTypeGeneric = -2
-)
-
-func (r RedisType) String() string {
-	switch r {
-	case RedisTypeNone:
-		return "None"
-	case RedisTypeString:
-		return "String"
-	case RedisTypeList:
-		return "List"
-	case RedisTypeHash:
-		return "Hash"
-	case RedisTypeSet:
-		return "Set"
-	case RedisTypeZSet:
-		return "ZSet"
-	case RedisTypeGeneric:
-		return "Generic"
-	default:
-		return fmt.Sprintf("RedisType(%d)", r)
-	}
-}
-
-func ParseRedisType(str string) (RedisType, error) {
-	switch str {
-	case "None":
-		return RedisTypeNone, nil
-	case "String":
-		return RedisTypeString, nil
-	case "List":
-		return RedisTypeList, nil
-	case "Hash":
-		return RedisTypeHash, nil
-	case "Set":
-		return RedisTypeSet, nil
-	case "ZSet":
-		return RedisTypeZSet, nil
-	case "Generic":
-		return RedisTypeGeneric, nil
-	default:
-		return 0, ErrUnknownRedisTypeString
-	}
-
-}
-func ParseRedisTypeFromRedis(str string) (RedisType, error) {
-	switch str {
-	case "string":
-		return RedisTypeString, nil
-	case "list":
-		return RedisTypeList, nil
-	case "hash":
-		return RedisTypeHash, nil
-	case "set":
-		return RedisTypeSet, nil
-	case "zset":
-		return RedisTypeZSet, nil
-	default:
-		return 0, ErrUnknownRedisTypeString
-	}
-}
-
-type KeyExtractor interface {
-	Keys(args []string) []string
-}
-
-type KeyExtractorFunc func(args []string) []string
-
-func (k KeyExtractorFunc) Keys(args []string) []string {
-	return k(args)
-}
-
-// KeysAtIndices returns a KeyExtractor.
-// The KeyExtractor returns the arguments with the indices passed to
-// KeysAtIndices.
-func KeysAtIndices(indices ...int) KeyExtractor {
-	return KeyExtractorFunc(func(args []string) []string {
-		keys := make([]string, len(indices))
+// ArgsAtIndices returns an ArgsExtractor.
+// The ArgsExtractor returns the arguments with the indices passed to
+// ArgsAtIndices.
+func ArgsAtIndices(indices ...int) ArgsExtractor {
+	return ArgsExtractorFunc(func(args []interface{}, extracted []interface{}) []interface{} {
+		baseInd := len(extracted)
+		extracted = append(extracted, make([]interface{}, len(indices))...)
 
 		for ind, argIndex := range indices {
-			keys[ind] = args[argIndex]
+			extracted[baseInd+ind] = args[argIndex]
 		}
 
-		return keys
+		return extracted
 	})
 }
 
-// KeysFromIndex returns a KeyExtractor.
-// The KeyExtractor returns all arguments starting at the index passed as a
+// ArgsFromIndex returns an ArgsExtractor.
+// The ArgsExtractor returns all arguments starting at the index passed as a
 // parameter. If the optional parameter skip is passed, skip arguments are
 // skipped after each key argument.
-func KeysFromIndex(index int, skip ...int) KeyExtractor {
-	return KeysFromUntilIndex(index, 0, skip...)
+func ArgsFromIndex(index int, skip ...int) ArgsExtractor {
+	return ArgsFromUntilIndex(index, 0, skip...)
 }
 
-// KeysFromIndexUntil returns a KeyExtractor.
-// The KeyExtractor returns all arguments between the two indices passed as
+// ArgsFromIndexUntil returns an ArgsExtractor.
+// The ArgsExtractor returns all arguments between the two indices passed as
 // parameters, including the argument at from and excluding the argument at
 // until. It works in the same way as slice ranges: args[from:until].
 //
@@ -221,7 +58,7 @@ func KeysFromIndex(index int, skip ...int) KeyExtractor {
 //
 // If the optional parameter skip is passed, skip arguments are skipped after
 // each key argument.
-func KeysFromUntilIndex(from, until int, skip ...int) KeyExtractor {
+func ArgsFromUntilIndex(from, until int, skip ...int) ArgsExtractor {
 	if len(skip) > 1 {
 		panic("optional skip parameter must contain at most one value")
 	}
@@ -231,7 +68,7 @@ func KeysFromUntilIndex(from, until int, skip ...int) KeyExtractor {
 		skipVal = skip[0]
 	}
 
-	return KeyExtractorFunc(func(args []string) []string {
+	return ArgsExtractorFunc(func(args []interface{}, extracted []interface{}) []interface{} {
 		untilIndex := until
 		if untilIndex <= 0 {
 			untilIndex = len(args) + untilIndex
@@ -239,13 +76,15 @@ func KeysFromUntilIndex(from, until int, skip ...int) KeyExtractor {
 			untilIndex = len(args) - 1
 		}
 
-		keys := make([]string, 0, (untilIndex-from+skipVal)/(1+skipVal))
+		ind := len(extracted)
+		extracted = append(extracted, make([]interface{}, (untilIndex-from+skipVal)/(1+skipVal))...)
 
 		for i := from; i < untilIndex; i += 1 + skipVal {
-			keys = append(keys, args[i])
+			extracted[ind] = args[i]
+			ind++
 		}
 
-		return keys
+		return extracted
 	})
 }
 
@@ -325,108 +164,145 @@ type TypeSpecificCommands struct {
 }
 
 var (
-	ErrInvalidAggregatorValue = errors.New("invalid Aggregator value")
+	ErrInvalidAggregationValue = errors.New("invalid Aggregation value")
 )
 
-type Aggregator int8
+type Aggregation int8
 
 const (
-	AggregatorSum Aggregator = iota
-	AggregatorCountOne
+	AggregationSum Aggregation = iota
+	AggregationCountOne
+	AggregationFirst
 )
 
 type TypeSpecificBulkTransformerConfig struct {
-	Commands   TypeSpecificCommands
-	Debulk     bool
-	Aggregator Aggregator
+	Commands            TypeSpecificCommands
+	Debulk              bool
+	Aggregation         Aggregation
+	AppendArgsExtractor ArgsExtractor
 }
 
 func TypeSpecificBulkTransformer(config *TypeSpecificBulkTransformerConfig) TransformFunc {
 	return TransformFunc(func(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
 		var typeInfoArray [12]TypeInfo
-		var stringArgsArray [12]string
+		var extractedArgsArray [12]interface{}
+		var keysArray [12]string
 
-		stringArgs := keyArgumentsToStringsAppend(args, stringArgsArray[:0])
-		keys := command.Keys(stringArgs)
+		keyArgs := command.KeyExtractor.AppendArgs(args, extractedArgsArray[:0])
+		keys := appendArgsAsStrings(keyArgs, keysArray[:0])
 
 		resolver := rewriter.Resolver()
-		ctx := context.Background()
+		ctx, cancel := context.WithCancel(context.Background())
 		typesInfo, err := resolver.ResolveAppend(ctx, keys, typeInfoArray[:0])
+		cancel()
 		if err != nil {
 			return nil, err
+		}
+
+		var appendArgs []interface{}
+		if config.AppendArgsExtractor != nil {
+			appendArgs = config.AppendArgsExtractor.AppendArgs(args, extractedArgsArray[:0])
 		}
 
 		keyTypeAggregation := KeyTypeAggregation{}
 		keyTypeAggregation.AppendKeys(typesInfo)
 
 		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
-			var sentCount, repliesCount int
-			var err error
-
-			sentCount, err = somethingSomething(config.Commands.None, keyTypeAggregation.None, ledisConn, config.Debulk)
+			repliesCount, err := sendBulkForAllTypes(config, keyTypeAggregation, ledisConn, appendArgs)
 			if err != nil {
 				return Slot{}, err
 			}
-			repliesCount += sentCount
-			sentCount, err = somethingSomething(config.Commands.KV, keyTypeAggregation.KV, ledisConn, config.Debulk)
-			if err != nil {
-				return Slot{}, err
-			}
-			repliesCount += sentCount
-			sentCount, err = somethingSomething(config.Commands.List, keyTypeAggregation.List, ledisConn, config.Debulk)
-			if err != nil {
-				return Slot{}, err
-			}
-			repliesCount += sentCount
-			sentCount, err = somethingSomething(config.Commands.Hash, keyTypeAggregation.Hash, ledisConn, config.Debulk)
-			if err != nil {
-				return Slot{}, err
-			}
-			repliesCount += sentCount
-			sentCount, err = somethingSomething(config.Commands.Set, keyTypeAggregation.Set, ledisConn, config.Debulk)
-			if err != nil {
-				return Slot{}, err
-			}
-			repliesCount += sentCount
-			sentCount, err = somethingSomething(config.Commands.ZSet, keyTypeAggregation.ZSet, ledisConn, config.Debulk)
-			if err != nil {
-				return Slot{}, err
-			}
-			repliesCount += sentCount
 
 			return Slot{
 				RepliesCount: repliesCount,
-				ProcessFunc: func(replies []interface{}) (interface{}, error) {
-					switch config.Aggregator {
-					case AggregatorSum:
-						var sum int
-						for _, reply := range replies {
-							value, err := redis.Int(reply, nil)
-							if err != nil {
-								return nil, err
-							}
-							sum += value
-						}
-						return sum, nil
-					case AggregatorCountOne:
-						return len(replies), nil
-					default:
-						return nil, ErrInvalidAggregatorValue
-					}
-				},
+				ProcessFunc:  Aggregator(config.Aggregation),
 			}, nil
 		}), nil
 	})
 }
 
-func somethingSomething(command string, keys []string, conn redis.Conn, debulk bool) (int, error) {
-	var sentCount int
+func Aggregator(aggregation Aggregation) func([]interface{}) (interface{}, error) {
+	return func(replies []interface{}) (interface{}, error) {
+		switch aggregation {
+		case AggregationSum:
+			var sum int64
+			for _, reply := range replies {
+				value, err := redis.Int64(reply, nil)
+				if err != nil {
+					return nil, err
+				}
+				sum += value
+			}
+			return sum, nil
+		case AggregationCountOne:
+			return int64(len(replies)), nil
+		case AggregationFirst:
+			if len(replies) == 0 {
+				return nil, nil
+			}
+			return replies[0], nil
+		default:
+			return nil, ErrInvalidAggregationValue
+		}
+	}
+}
 
-	if len(command) > 0 {
+func sendBulkForAllTypes(
+	config *TypeSpecificBulkTransformerConfig,
+	keyTypeAggregation KeyTypeAggregation,
+	ledisConn redis.Conn,
+	appendArgs []interface{},
+) (int, error) {
+	var sentCount, repliesCount int
+	var err error
+
+	sentCount, err = sendBulk(config.Commands.None, keyTypeAggregation.None, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+	sentCount, err = sendBulk(config.Commands.KV, keyTypeAggregation.KV, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+	sentCount, err = sendBulk(config.Commands.List, keyTypeAggregation.List, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+	sentCount, err = sendBulk(config.Commands.Hash, keyTypeAggregation.Hash, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+	sentCount, err = sendBulk(config.Commands.Set, keyTypeAggregation.Set, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+	sentCount, err = sendBulk(config.Commands.ZSet, keyTypeAggregation.ZSet, ledisConn, config.Debulk, appendArgs)
+	if err != nil {
+		return repliesCount, err
+	}
+	repliesCount += sentCount
+
+	return repliesCount, nil
+}
+
+func sendBulk(command string, keys []string, conn redis.Conn, debulk bool, appendArgs []interface{}) (int, error) {
+	var sentCount int
+	var argsArray [12]interface{}
+
+	if len(command) > 0 && len(keys) > 0 {
 		if debulk {
 			for _, key := range keys {
 				sentCount++
-				err := conn.Send(command, key)
+
+				args := append(argsArray[:0], key)
+				args = append(args, appendArgs...)
+
+				err := conn.Send(command, args...)
 				if err != nil {
 					return sentCount, err
 				}
@@ -434,11 +310,11 @@ func somethingSomething(command string, keys []string, conn redis.Conn, debulk b
 		} else {
 			sentCount++
 
-			var argsArray [12]interface{}
 			args := append(argsArray[:0], make([]interface{}, len(keys))...)
 			for i := range keys {
 				args[i] = keys[i]
 			}
+			args = append(args, appendArgs...)
 
 			err := conn.Send(command, args...)
 			if err != nil {
@@ -454,44 +330,22 @@ var (
 	ErrUnknownRedisCommandName = errors.New("input string does not represent a known RedisCommand name")
 )
 
-var _ KeyExtractor = &RedisCommand{}
-
 type RedisCommand struct {
 	Name          string
 	KeyType       RedisType
-	KeyExtractor  KeyExtractor
+	KeyExtractor  ArgsExtractor
 	TransformFunc TransformFunc
 	Syntax        string
 }
 
-func (r RedisCommand) Keys(args []string) []string {
-	return r.KeyExtractor.Keys(args)
+func (r RedisCommand) Keys(args []interface{}) []string {
+	var keyArgsArray [12]interface{}
+	keyArgs := r.KeyExtractor.AppendArgs(args, keyArgsArray[:0])
+	return argsAsStrings(keyArgs)
 }
 
-func keyArgumentsToStrings(args []interface{}) []string {
-	return keyArgumentsToStringsAppend(args, nil)
-}
-
-func keyArgumentsToStringsAppend(args []interface{}, stringArgs []string) []string {
-	baseIndex := len(stringArgs)
-	stringArgs = append(stringArgs, make([]string, len(args))...)
-
-	for i, arg := range args {
-		switch typedArg := arg.(type) {
-		case string:
-			stringArgs[baseIndex+i] = typedArg
-		case []byte:
-			stringArgs[baseIndex+i] = string(typedArg)
-		case redis.Argument:
-			nestedArg := typedArg.RedisArg()
-			switch typedArg := nestedArg.(type) {
-			case string:
-				stringArgs[baseIndex+i] = typedArg
-			case []byte:
-				stringArgs[baseIndex+i] = string(typedArg)
-			}
-		}
-	}
-
-	return stringArgs
+func (r RedisCommand) AppendKeys(args []interface{}, keys []string) []string {
+	var keyArgsArray [12]interface{}
+	keyArgs := r.KeyExtractor.AppendArgs(args, keyArgsArray[:0])
+	return appendArgsAsStrings(keyArgs, keys)
 }
