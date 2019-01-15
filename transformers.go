@@ -680,7 +680,7 @@ func PingCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []in
 
 			return Slot{
 				RepliesCount: 1,
-				ProcessFunc: func(replies []interface{}) (interface{}, error) {
+				ProcessFunc: func(_ []interface{}) (interface{}, error) {
 					return message, nil
 				},
 			}, nil
@@ -762,14 +762,14 @@ func UnsafeCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []
 			}, nil
 		}), nil
 	} else if argInfo.EqualFoldEither(stringSELF, bytesSELF) {
-		if len(args) != 0 {
+		if len(args) != 1 {
 			return nil, ErrInvalidSyntax
 		}
 
 		return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
 			return Slot{
 				RepliesCount: 0,
-				ProcessFunc: func(replies []interface{}) (interface{}, error) {
+				ProcessFunc: func(_ []interface{}) (interface{}, error) {
 					return ledisConn, nil
 				},
 			}, nil
