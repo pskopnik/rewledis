@@ -67,11 +67,11 @@ func (l *LedisConn) Err() error {
 	if l.err != nil {
 		return l.err
 	}
+
 	if l.conn == nil {
 		return ErrConnClosed
 	}
-	// All errors should be returned by now (l.err captures all errors). To be
-	// safe, also check Err() of the underlying connection.
+
 	return l.conn.Err()
 }
 
@@ -97,12 +97,8 @@ func (l *LedisConn) Flush() error {
 		return ErrConnClosed
 	}
 
-	err := l.conn.Flush()
-	if err != nil {
-		return l.fatal(err)
-	}
-
-	return nil
+	// error is captured by underlying conn
+	return l.conn.Flush()
 }
 
 // Receive receives a single reply from the Redis server.
@@ -116,12 +112,17 @@ func (l *LedisConn) Receive() (interface{}, error) {
 	var repliesArray [8]interface{}
 	replies, err := l.receiveRepliesAppend(slot.RepliesCount, repliesArray[:0])
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	reply, err := slot.ProcessFunc(replies)
 	if err != nil {
 		return nil, l.fatal(err)
+	}
+
+	if err, ok := reply.(redis.Error); ok {
+		return reply, err
 	}
 
 	return reply, nil
@@ -144,12 +145,17 @@ func (l *LedisConn) ReceiveWithTimeout(timeout time.Duration) (interface{}, erro
 	var repliesArray [8]interface{}
 	replies, err := l.receiveRepliesWithTimeoutAppend(connWithTimeout, slot.RepliesCount, timeout, repliesArray[:0])
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	reply, err := slot.ProcessFunc(replies)
 	if err != nil {
 		return nil, l.fatal(err)
+	}
+
+	if err, ok := reply.(redis.Error); ok {
+		return reply, err
 	}
 
 	return reply, nil
@@ -167,30 +173,38 @@ func (l *LedisConn) Do(commandName string, args ...interface{}) (interface{}, er
 	if len(commandName) > 0 {
 		slot, err = l.rewriteAndSend(commandName, args...)
 		if err != nil {
+			// could be not-fataled if fatal is pushed into rewriteAndSend
 			return nil, l.fatal(err)
 		}
 	}
 
 	err = l.conn.Flush()
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	err = l.consumeSlots()
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	if len(commandName) > 0 {
 		var repliesArray [8]interface{}
 		replies, err := l.receiveRepliesAppend(slot.RepliesCount, repliesArray[:0])
 		if err != nil {
-			return nil, l.fatal(err)
+			// error is captured by underlying conn
+			return nil, err
 		}
 
 		reply, err := slot.ProcessFunc(replies)
 		if err != nil {
 			return nil, l.fatal(err)
+		}
+
+		if err, ok := reply.(redis.Error); ok {
+			return reply, err
 		}
 
 		return reply, nil
@@ -217,30 +231,38 @@ func (l *LedisConn) DoWithTimeout(timeout time.Duration, commandName string, arg
 	if len(commandName) > 0 {
 		slot, err = l.rewriteAndSend(commandName, args...)
 		if err != nil {
+			// could be not-fataled if fatal is pushed into rewriteAndSend
 			return nil, l.fatal(err)
 		}
 	}
 
 	err = l.conn.Flush()
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	err = l.consumeSlots()
 	if err != nil {
-		return nil, l.fatal(err)
+		// error is captured by underlying conn
+		return nil, err
 	}
 
 	if len(commandName) > 0 {
 		var repliesArray [8]interface{}
 		replies, err := l.receiveRepliesWithTimeoutAppend(connWithTimeout, slot.RepliesCount, timeout, repliesArray[:0])
 		if err != nil {
-			return nil, l.fatal(err)
+			// error is captured by underlying conn
+			return nil, err
 		}
 
 		reply, err := slot.ProcessFunc(replies)
 		if err != nil {
 			return nil, l.fatal(err)
+		}
+
+		if err, ok := reply.(redis.Error); ok {
+			return reply, err
 		}
 
 		return reply, nil
@@ -254,7 +276,9 @@ func (l *LedisConn) consumeSlots() error {
 		for j := 0; j < l.slots.At(i).RepliesCount; j++ {
 			_, err := l.conn.Receive()
 			if err != nil {
-				return err
+				if _, ok := err.(redis.Error); !ok {
+					return err
+				}
 			}
 		}
 	}
@@ -285,7 +309,13 @@ func (l *LedisConn) receiveRepliesAppend(count int, replies []interface{}) ([]in
 	for i := 0; i < count; i++ {
 		reply, err := l.conn.Receive()
 		if err != nil {
-			return nil, err
+			if _, ok := err.(redis.Error); ok {
+				if reply == nil {
+					reply = err
+				}
+			} else {
+				return replies[:baseInd], err
+			}
 		}
 		replies[baseInd+i] = reply
 	}
@@ -308,7 +338,13 @@ func (l *LedisConn) receiveRepliesWithTimeoutAppend(
 		timeout := time.Now().Sub(deadline)
 		reply, err := connWithTimeout.ReceiveWithTimeout(timeout)
 		if err != nil {
-			return nil, err
+			if _, ok := err.(redis.Error); ok {
+				if reply == nil {
+					reply = err
+				}
+			} else {
+				return replies[:baseInd], err
+			}
 		}
 		replies[baseInd+i] = reply
 	}
