@@ -113,7 +113,7 @@ func (l *LedisConn) Receive() (interface{}, error) {
 
 	slot := l.slots.PopFront()
 
-	var repliesArray [4]interface{}
+	var repliesArray [8]interface{}
 	replies, err := l.receiveRepliesAppend(slot.RepliesCount, repliesArray[:0])
 	if err != nil {
 		return nil, l.fatal(err)
@@ -141,7 +141,7 @@ func (l *LedisConn) ReceiveWithTimeout(timeout time.Duration) (interface{}, erro
 
 	slot := l.slots.PopFront()
 
-	var repliesArray [4]interface{}
+	var repliesArray [8]interface{}
 	replies, err := l.receiveRepliesWithTimeoutAppend(connWithTimeout, slot.RepliesCount, timeout, repliesArray[:0])
 	if err != nil {
 		return nil, l.fatal(err)
@@ -182,7 +182,7 @@ func (l *LedisConn) Do(commandName string, args ...interface{}) (interface{}, er
 	}
 
 	if len(commandName) > 0 {
-		var repliesArray [4]interface{}
+		var repliesArray [8]interface{}
 		replies, err := l.receiveRepliesAppend(slot.RepliesCount, repliesArray[:0])
 		if err != nil {
 			return nil, l.fatal(err)
@@ -232,7 +232,7 @@ func (l *LedisConn) DoWithTimeout(timeout time.Duration, commandName string, arg
 	}
 
 	if len(commandName) > 0 {
-		var repliesArray [4]interface{}
+		var repliesArray [8]interface{}
 		replies, err := l.receiveRepliesWithTimeoutAppend(connWithTimeout, slot.RepliesCount, timeout, repliesArray[:0])
 		if err != nil {
 			return nil, l.fatal(err)
