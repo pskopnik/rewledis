@@ -3,6 +3,8 @@ package rewledis
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	rewledisArgs "github.com/pskopnik/rewledis/args"
 
@@ -439,6 +441,151 @@ func parseSetCommand(args []interface{}) (info setCommandInfo, err error) {
 	}
 
 	return
+}
+
+var lremScript = redis.NewScript(2, `
+local function reverse(arr)
+	local i, j = 1, #arr
+
+	while i < j do
+		arr[i], arr[j] = arr[j], arr[i]
+
+		i = i + 1
+		j = j - 1
+	end
+end
+
+local listKey = KEYS[1]
+local tempListKey = KEYS[2]
+local count = tonumber(ARGV[1])
+local value = ARGV[2]
+
+local removedCount = 0
+local listLen = ledis.call('LLEN', listKey)
+
+if count >= 0
+then
+	local processed = 0
+
+	for i = 0, listLen - 1, 1 do
+		element = ledis.call('LPOP', listKey)
+		processed = processed + 1
+
+		if element == value
+		then
+			removedCount = removedCount + 1
+			if removedCount == count
+			then
+				break
+			end
+		else
+			ledis.call('RPUSH', tempListKey, element)
+		end
+	end
+
+	if processed < listLen
+	then
+		remainingElements = ledis.call('LRANGE', listKey, 0, -1)
+		ledis.call('RPUSH', tempListKey, unpack(remainingElements))
+	end
+else
+	local processed = 0
+
+	for i = 0, listLen - 1, 1 do
+		element = ledis.call('LINDEX', listKey, -1)
+		processed = processed + 1
+
+		if element == value
+		then
+			ledis.call('RPOP', listKey)
+			removedCount = removedCount + 1
+			if removedCount == -count
+			then
+				break
+			end
+		else
+			ledis.call('RPOPLPUSH', listKey, tempListKey)
+		end
+	end
+
+	if processed < listLen
+	then
+		remainingElements = ledis.call('LRANGE', listKey, 0, -1)
+		reverse(remainingElements)
+		ledis.call('LPUSH', tempListKey, unpack(remainingElements))
+	end
+end
+
+-- move temporary list content to the original key
+
+local tempListContent = ledis.call('LDUMP', tempListKey)
+local listTTL = ledis.call('LTTL', listKey)
+
+local restoreTTL = 0
+if listTTL > -1
+then
+	restoreTTL = listTTL * 1000
+end
+
+ledis.call('RESTORE', listKey, restoreTTL, tempListContent)
+ledis.call('LCLEAR', tempListKey)
+
+return removedCount
+`)
+
+func LremCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
+	if len(args) < 3 {
+		return nil, ErrInvalidSyntax
+	}
+
+	argInfo := rewledisArgs.Parse(args[0])
+	listKey, err := argInfo.ConvertToRedisString()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	tempListKey := fmt.Sprintf("rewledis:temp:%d%d:%s", now.Unix(), now.Nanosecond(), listKey)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	conn, err := rewriter.internalSubPool.getRaw(ctx)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := redis.Values(conn.Do("SCRIPT", "EXISTS", lremScript.Hash()))
+	if err != nil {
+		return nil, err
+	}
+
+	var scriptExists int
+	_, err = redis.Scan(reply, &scriptExists)
+	if err != nil {
+		return nil, err
+	}
+
+	if scriptExists == 0 {
+		err = lremScript.Load(conn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return SendLedisFunc(func(ledisConn redis.Conn) (Slot, error) {
+		err := lremScript.SendHash(ledisConn, listKey, tempListKey, args[1], args[2])
+		if err != nil {
+			return Slot{}, err
+		}
+
+		return Slot{
+			RepliesCount: 1,
+			ProcessFunc: func(replies []interface{}) (interface{}, error) {
+				return replies[0], nil
+			},
+		}, nil
+	}), nil
 }
 
 func ZaddCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {

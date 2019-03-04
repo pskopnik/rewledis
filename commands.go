@@ -352,14 +352,6 @@ var (
 		Syntax:        "LPOP key",
 	}
 
-	RedisCommandLRANGE = RedisCommand{
-		Name:          "LRANGE",
-		KeyType:       RedisTypeList,
-		KeyExtractor:  ArgsAtIndices(0),
-		TransformFunc: NoneTransformer(),
-		Syntax:        "LRANGE key start stop",
-	}
-
 	RedisCommandLPUSH = RedisCommand{
 		Name:          "LPUSH",
 		KeyType:       RedisTypeList,
@@ -368,9 +360,23 @@ var (
 		Syntax:        "LPUSH key value [value ...]",
 	}
 
-	// LPUSHX command is not implemented in LedisDB.
+	RedisCommandLRANGE = RedisCommand{
+		Name:          "LRANGE",
+		KeyType:       RedisTypeList,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: NoneTransformer(),
+		Syntax:        "LRANGE key start stop",
+	}
 
-	// LREM command is not implemented in LedisDB.
+	RedisCommandLREM = RedisCommand{
+		Name:          "LREM",
+		KeyType:       RedisTypeList,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: LremCommandTransformer,
+		Syntax:        "LREM key count value",
+	}
+
+	// LPUSHX command is not implemented in LedisDB.
 
 	// LSET command is not implemented in LedisDB.
 
@@ -1164,6 +1170,8 @@ func RedisCommandFromName(name string) (*RedisCommand, error) {
 		return &RedisCommandLPUSH, nil
 	case "LRANGE":
 		return &RedisCommandLRANGE, nil
+	case "LREM":
+		return &RedisCommandLREM, nil
 	case "LTRIM":
 		return &RedisCommandLTRIM, nil
 	case "RPOP":
