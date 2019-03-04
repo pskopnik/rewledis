@@ -690,6 +690,37 @@ func PingCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []in
 	}
 }
 
+// TransactionTransformer performs transformations for transaction related
+// Redis commands.
+//
+// Support for transaction commands has not yet been integrated into rewledis.
+// The transformer drops all commands except DISCARD for which
+// ErrNoEmulationPossible is returned. This "emulation" is subject to
+// race-conditions.
+func TransactionTransformer(rewriter *Rewriter, command *RedisCommand, args []interface{}) (SendLedisFunc, error) {
+	switch command.Name {
+	case "DISCARD":
+		return nil, ErrNoEmulationPossible
+	case "EXEC":
+		fallthrough
+	case "MULTI":
+		fallthrough
+	case "UNWATCH":
+		fallthrough
+	case "WATCH":
+		return SendLedisFunc(func(_ redis.Conn) (Slot, error) {
+			return Slot{
+				RepliesCount: 0,
+				ProcessFunc: func(_ []interface{}) (interface{}, error) {
+					return nil, nil
+				},
+			}, nil
+		}), nil
+	default:
+		return nil, ErrSubCommandUnknown
+	}
+}
+
 // ScriptCommandTransformer performs transformations for the SCRIPT Redis
 // command.
 //

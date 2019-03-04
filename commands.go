@@ -890,6 +890,52 @@ var (
 	// to the parameters required by Redis.
 )
 
+// RedisCommand variables describing the Redis commands for performing
+// transactions.
+//
+//     https://redis.io/commands#transactions
+var (
+	RedisCommandDISCARD = RedisCommand{
+		Name:          "DISCARD",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: TransactionTransformer,
+		Syntax:        "DISCARD",
+	}
+
+	RedisCommandEXEC = RedisCommand{
+		Name:          "EXEC",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: TransactionTransformer,
+		Syntax:        "EXEC",
+	}
+
+	RedisCommandMULTI = RedisCommand{
+		Name:          "MULTI",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: TransactionTransformer,
+		Syntax:        "MULTI",
+	}
+
+	RedisCommandUNWATCH = RedisCommand{
+		Name:          "UNWATCH",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsAtIndices(0),
+		TransformFunc: TransactionTransformer,
+		Syntax:        "UNWATCH",
+	}
+
+	RedisCommandWATCH = RedisCommand{
+		Name:          "WATCH",
+		KeyType:       RedisTypeGeneric,
+		KeyExtractor:  ArgsFromIndex(0),
+		TransformFunc: TransactionTransformer,
+		Syntax:        "WATCH key [key ...]",
+	}
+)
+
 // RedisCommand variables describing the Redis commands for altering server
 // configuration and perform server-side, global actions.
 //
@@ -1208,6 +1254,16 @@ func RedisCommandFromName(name string) (*RedisCommand, error) {
 		return &RedisCommandSORT, nil
 	case "TTL":
 		return &RedisCommandTTL, nil
+	case "DISCARD":
+		return &RedisCommandDISCARD, nil
+	case "EXEC":
+		return &RedisCommandEXEC, nil
+	case "MULTI":
+		return &RedisCommandMULTI, nil
+	case "UNWATCH":
+		return &RedisCommandUNWATCH, nil
+	case "WATCH":
+		return &RedisCommandWATCH, nil
 	case "AUTH":
 		return &RedisCommandAUTH, nil
 	case "ECHO":
