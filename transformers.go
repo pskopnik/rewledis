@@ -627,7 +627,12 @@ func ZaddCommandTransformer(rewriter *Rewriter, command *RedisCommand, args []in
 				return Slot{}, err
 			}
 		} else {
-			err = ledisConn.Send("ZADD", args[0], args[commandInfo.NumFlags+1:])
+			var transformedArgsArray [13]interface{}
+
+			transformedArgs := append(transformedArgsArray[:0], args[0])
+			transformedArgs = append(transformedArgs, args[commandInfo.NumFlags+1:]...)
+
+			err = ledisConn.Send("ZADD", transformedArgs...)
 			if err != nil {
 				return Slot{}, err
 			}
