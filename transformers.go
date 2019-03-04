@@ -463,6 +463,11 @@ local value = ARGV[2]
 local removedCount = 0
 local listLen = ledis.call('LLEN', listKey)
 
+if listLen == 0
+then
+	return 0
+end
+
 if count >= 0
 then
 	local processed = 0
