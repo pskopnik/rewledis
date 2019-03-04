@@ -461,6 +461,8 @@ local count = tonumber(ARGV[1])
 local value = ARGV[2]
 
 local removedCount = 0
+local processed = 0
+local tempListLen = 0
 local listLen = ledis.call('LLEN', listKey)
 
 if listLen == 0
@@ -470,8 +472,6 @@ end
 
 if count >= 0
 then
-	local processed = 0
-
 	for i = 0, listLen - 1, 1 do
 		element = ledis.call('LPOP', listKey)
 		processed = processed + 1
@@ -485,6 +485,7 @@ then
 			end
 		else
 			ledis.call('RPUSH', tempListKey, element)
+			tempListLen = tempListLen + 1
 		end
 	end
 
@@ -492,10 +493,9 @@ then
 	then
 		remainingElements = ledis.call('LRANGE', listKey, 0, -1)
 		ledis.call('RPUSH', tempListKey, unpack(remainingElements))
+		tempListLen = tempListLen + #remainingElements
 	end
 else
-	local processed = 0
-
 	for i = 0, listLen - 1, 1 do
 		element = ledis.call('LINDEX', listKey, -1)
 		processed = processed + 1
@@ -510,6 +510,7 @@ else
 			end
 		else
 			ledis.call('RPOPLPUSH', listKey, tempListKey)
+			tempListLen = tempListLen + 1
 		end
 	end
 
@@ -518,22 +519,28 @@ else
 		remainingElements = ledis.call('LRANGE', listKey, 0, -1)
 		reverse(remainingElements)
 		ledis.call('LPUSH', tempListKey, unpack(remainingElements))
+		tempListLen = tempListLen + #remainingElements
 	end
 end
 
 -- move temporary list content to the original key
 
-local tempListContent = ledis.call('LDUMP', tempListKey)
-local listTTL = ledis.call('LTTL', listKey)
-
-local restoreTTL = 0
-if listTTL > -1
+if tempListLen > 0
 then
-	restoreTTL = listTTL * 1000
-end
+	local tempListContent = ledis.call('LDUMP', tempListKey)
+	local listTTL = ledis.call('LTTL', listKey)
 
-ledis.call('RESTORE', listKey, restoreTTL, tempListContent)
-ledis.call('LCLEAR', tempListKey)
+	local restoreTTL = 0
+	if listTTL > -1
+	then
+		restoreTTL = listTTL * 1000
+	end
+
+	ledis.call('RESTORE', listKey, restoreTTL, tempListContent)
+	ledis.call('LCLEAR', tempListKey)
+else
+	ledis.call('LCLEAR', listKey)
+end
 
 return removedCount
 `)
